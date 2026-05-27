@@ -13,7 +13,7 @@ class OPENCV(Protocol):
         ...
     def verify_load(self)-> bool:
         ...
-    def load_parameters(self) -> None:
+    def load_parameters(self, camera_input:Optional[str]) -> None:
         ...
 
 class OpenCVImpl(OPENCV):
@@ -59,7 +59,7 @@ class OpenCVImpl(OPENCV):
                 return False
         return True
 
-    def load_parameters(self) -> None:
+    def load_parameters(self, camera_input:Optional[str]) -> None:
         """
         Carga los parámetros necesarios para la detección de marcadores ArUco.
         
@@ -67,14 +67,20 @@ class OpenCVImpl(OPENCV):
         ----------
         `None`: No retorna ningún valor, pero inicializa los atributos necesarios para la detección de marcadores ArUco.
 
-        Patametros cargados:
-        - `parameters`: Parámetros de detección de ArUco.
+        Parameters:
+        ----------
+        - `camera_input`: Ruta de la cámara de video. Si es None, se utilizará la cámara por defecto.
 
         """
 
         self.parameters = cv2.aruco.DetectorParameters()
         self.dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
-        self.camara = cv2.VideoCapture(0)
+        if camera_input is None:
+            self.camara = cv2.VideoCapture(0)
+        else:
+            self.camara = cv2.VideoCapture(camera_input)
+        if not self.camara.isOpened():
+            raise RuntimeError("Error al inicializar la cámara")
 
     def aruco_detection(self) -> None:
         """
@@ -83,6 +89,10 @@ class OpenCVImpl(OPENCV):
         while True:
             ___, frame = self.camara.read()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            if not __ or frame is None:
+                print("Error al capturar el video")
+                break
 
             #Detectamos los marcadores en las imagenes
             detector = cv2.aruco.ArucoDetector(self.dict, self.parameters)
@@ -155,6 +165,7 @@ class OpenCVImpl(OPENCV):
                     break   
 
     def end_session(self) -> None:
-        self.camara.release()
+        if self.camara is not None:
+            self.camara.release()
         cv2.destroyAllWindows()
 
