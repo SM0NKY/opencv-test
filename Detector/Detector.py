@@ -59,7 +59,7 @@ class OpenCVImpl(OPENCV):
                 return False
         return True
 
-    def load_parameters(self, camera_input:Optional[str]) -> None:
+    def load_parameters(self, camera_input:Optional[str] = None) -> None:
         """
         Carga los parámetros necesarios para la detección de marcadores ArUco.
         
@@ -86,21 +86,27 @@ class OpenCVImpl(OPENCV):
         """
         Realiza la detección de marcadores ArUco en tiempo real utilizando la cámara. Superpone las imágenes correspondientes a los marcadores detectados en la transmisión de video.
         """
+        if self.camara is None:
+            raise RuntimeError("La cámara no ha sido inicializada. Llama a load_parameters() antes de aruco_detection().")
+        detector = cv2.aruco.ArucoDetector(self.dict, self.parameters)
+
         while True:
             ___, frame = self.camara.read()
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            if not __ or frame is None:
+            
+            if not ___ or frame is None:
                 print("Error al capturar el video")
                 break
 
+            output = frame.copy()
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+
             #Detectamos los marcadores en las imagenes
-            detector = cv2.aruco.ArucoDetector(self.dict, self.parameters)
             esquinas, ids, _ = detector.detectMarkers(gray) #Donde _ son los candidatos malos
 
             if ids is not None:
 
-                aruco = cv2.aruco.drawDetectedMarkers(frame, esquinas)
+                cv2.aruco.drawDetectedMarkers(output,esquinas,ids)
 
                 for i, marker_id in enumerate(ids.flatten()):
                 #print("ID marker:", marker_id)
@@ -110,59 +116,53 @@ class OpenCVImpl(OPENCV):
                         
                     imagen = self.images_map[int(marker_id)]
 
-                    #Extraemos los puntos de las esquinas en coordenadas 
-                    pts = esquinas[i].reshape((4, 2)).astype(float)
-                    c1 = (esquinas[i][0][0][0], esquinas[i][0][0][1])
-                    c2 = (esquinas[i][0][1][0], esquinas[i][0][1][1])
-                    c3 = (esquinas[i][0][2][0], esquinas[i][0][2][1])
-                    c4 = (esquinas[i][0][3][0], esquinas[i][0][3][1])
-
-                    #Extraemos el tamano de la imagen 
-                    if self.images_map is not None:
-
-                        #Nuevo
-                        copy = frame.copy()
-
-                        Tamano = imagen.shape
-
-                        #Organizamos las coordenadas del aruco en una matriz
-                        puntos_aruco = np.array([c1, c2, c3, c4], dtype=float)
-                        #Organizamos las coordenadas de la imagen en otra matriz
-                        puntos_imagen = np.array([
+                    if imagen is None:
+                        print(f"Error: No se puede cargar la imagen para la id {marker_id}")
+                        continue
+                    
+                    #Extraccion de los puntos de las esquinas en coordenadas 
+                    pts_aruco = esquinas[i].reshape((4, 2)).astype(np.float32)
+                    alto, ancho = imagen.shape[:2]
+                    
+                    pts_imagen:np.array = np.array([
                         [0, 0],
-                        [Tamano[1]-1, 0],
-                        [Tamano[1]-1, Tamano[0]-1],
-                        [0, Tamano[0]-1]
-                        ], dtype=float)
-
+                        [ancho - 1, 0],
+                        [ancho - 1, alto - 1],
+                        [0, alto - 1]
+                    ], dtype=np.float32)
+                    #Extraemos el tamaño de la imagen 
+                    
                         #Realizamos la superposicion de la imgen (NAnografica)
-                        h, __ = cv2.findHomography(puntos_imagen, puntos_aruco)
+                    h, _ = cv2.findHomography(pts_imagen, pts_aruco)
 
                         #Posiblemente lo remueva
-                        if h is None:
+                    if h is None:
                             continue
 
                         #Realizamos las transformaciones de perspectiva
-                        perspectiva = cv2.warpPerspective(imagen, h, (copy.shape[1], copy.shape[0]))
-                        mask = np.zeros((copy.shape[0], copy.shape[1]), dtype=np.uint8)
-                        cv2.fillConvexPoly(mask, puntos_aruco.astype(int), 255)
-                        mask_inv = cv2.bitwise_not(mask)
-                        fondo = cv2.bitwise_and(copy, copy, mask=mask_inv)
-                        frente = cv2.bitwise_and(perspectiva, perspectiva, mask=mask)
+                    perspectiva = cv2.warpPerspective(
+                        imagen,
+                        h,
+                        (output.shape[1], output.shape[0])
+                    )
+                    
+                    mask = np.zeros((output.shape[0], output.shape[1]), dtype=np.uint8)
+                    cv2.fillConvexPoly(mask, pts_aruco.astype(int), 255)
+                    
+                    mask_inv = cv2.bitwise_not(mask)
+                    
+                    fondo = cv2.bitwise_and(output, output, mask=mask_inv)
+                    frente = cv2.bitwise_and(perspectiva, perspectiva, mask=mask)
 
-                        copy = fondo + frente
-                        cv2.imshow("Realidad virtual", copy)
-                        k = cv2.waitKey(1)
-                    else:
-                        print("No tenemos imagen")
-                        k = cv2.waitKey(1)
-            else:
-                cv2.imshow("Realidad virtual", frame)
-                k = cv2.waitKey(1)
-
-                if k == 27:
-                    print("Adios")
-                    break   
+                    output = cv2.add(fondo, frente)
+                
+            cv2.imshow("Realidad virtual", output)
+            k = cv2.waitKey(1) & 0xFF
+                
+                
+            if k == 27:
+                print("Adios")
+                break   
 
     def end_session(self) -> None:
         if self.camara is not None:
