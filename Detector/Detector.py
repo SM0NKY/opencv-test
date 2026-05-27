@@ -1,4 +1,4 @@
-from typing import Any,Callable, Dict, List, Optional, Protocol, Tuple, Union
+from typing import Any,Callable, Dict, List, Optional, Protocol, Tuple
 import cv2
 import numpy as np
 import os 
@@ -60,18 +60,33 @@ class OpenCVImpl(OPENCV):
         return True
 
     def load_parameters(self) -> None:
+        """
+        Carga los parámetros necesarios para la detección de marcadores ArUco.
+        
+        Retorna:
+        ----------
+        `None`: No retorna ningún valor, pero inicializa los atributos necesarios para la detección de marcadores ArUco.
+
+        Patametros cargados:
+        - `parameters`: Parámetros de detección de ArUco.
+
+        """
+
         self.parameters = cv2.aruco.DetectorParameters()
         self.dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
         self.camara = cv2.VideoCapture(0)
 
     def aruco_detection(self) -> None:
+        """
+        Realiza la detección de marcadores ArUco en tiempo real utilizando la cámara. Superpone las imágenes correspondientes a los marcadores detectados en la transmisión de video.
+        """
         while True:
-            ret, frame = self.camara.read()
+            ___, frame = self.camara.read()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
             #Detectamos los marcadores en las imagenes
             detector = cv2.aruco.ArucoDetector(self.dict, self.parameters)
-            esquinas, ids, candidatos_malos = detector.detectMarkers(gray)
+            esquinas, ids, _ = detector.detectMarkers(gray) #Donde _ son los candidatos malos
 
             if ids is not None:
 
@@ -79,13 +94,14 @@ class OpenCVImpl(OPENCV):
 
                 for i, marker_id in enumerate(ids.flatten()):
                 #print("ID marker:", marker_id)
-                    if marker_id not in self.images_map:
+                    if int(marker_id) not in self.images_map:
                         print("No existen las imagenes")
                         continue #Si no hay imagen asociada saltamos
-
-                    imagen = self.images_map[marker_id]
+                        
+                    imagen = self.images_map[int(marker_id)]
 
                     #Extraemos los puntos de las esquinas en coordenadas 
+                    pts = esquinas[i].reshape((4, 2)).astype(float)
                     c1 = (esquinas[i][0][0][0], esquinas[i][0][0][1])
                     c2 = (esquinas[i][0][1][0], esquinas[i][0][1][1])
                     c3 = (esquinas[i][0][2][0], esquinas[i][0][2][1])
@@ -110,7 +126,7 @@ class OpenCVImpl(OPENCV):
                         ], dtype=float)
 
                         #Realizamos la superposicion de la imgen (NAnografica)
-                        h, estado = cv2.findHomography(puntos_imagen, puntos_aruco)
+                        h, __ = cv2.findHomography(puntos_imagen, puntos_aruco)
 
                         #Posiblemente lo remueva
                         if h is None:
@@ -142,4 +158,3 @@ class OpenCVImpl(OPENCV):
         self.camara.release()
         cv2.destroyAllWindows()
 
-                
